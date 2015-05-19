@@ -1,0 +1,14 @@
+[package]
+name = "filesystem"
+version = "0.0.1"
+authors = [ "afpacket <afpacket@gmail.com>" ]
+
+[lib]
+name = "filesystem"
+crate-type = ["rlib"]
+
+[dependencies]
+time = "*"
+
+[dependencies.fuse]
+git = "https://github.com/zargony/rust-fuse.git"

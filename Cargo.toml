@@ -1,0 +1,17 @@
+
+[package]
+name = "wlfs"
+version = "0.0.1"
+authors = [ "afpacket <afpacket@gmail.com>" ]
+
+[[bin]]
+name = "wlfs"
+
+[dependencies]
+time = "*"
+
+[dependencies.filesystem]
+path = "lib/filesystem/"
+
+[dependencies.fuse]
+git = "https://github.com/zargony/rust-fuse.git"
