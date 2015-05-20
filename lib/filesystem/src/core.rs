@@ -91,54 +91,44 @@ impl BasicFileSystem {
         if result.is_ok() {
             parent_dir.rmnod(dirname, FileType::Directory).unwrap();
         }
-
         result
     }
 }
 
 const TTL: time::Timespec = time::Timespec { sec: 0, nsec: 0 };
 
+macro_rules! find_node_or_error {
+    ($dir:expr, $key:expr, $reply:expr) => {
+        match $dir.find_node($key) {
+            Some(node) => node.clone(),
+            None => { $reply.error(ENOENT); return; }
+        };
+    }
+}
+
 impl fuse::Filesystem for BasicFileSystem {
     fn lookup (&mut self, _req: &Request, parent: Inode, name: &Path, reply: ReplyEntry) {
         println!("{}: parent={} name={:?}", "lookup", parent, name);
-        let node = self.find_node(parent);
-        if node.is_none() {
-            reply.error(ENOENT);
-            return;
-        }
-        let parent_dir = node.unwrap().to_dir().borrow();
-
-        let node = parent_dir.find_node(name.to_str().unwrap());
-        match node {
-            Some(entry) => reply.entry(&TTL, &entry.attr(), 0),
-            None => reply.error(ENOENT)
-        }
+        let node = find_node_or_error!(self, parent, reply);
+        let parent_dir = node.to_dir().borrow();
+        let entry = find_node_or_error!(parent_dir, name.to_str().unwrap(), reply);
+        reply.entry(&TTL, &entry.attr(), 0);
     }
 
     fn getattr (&mut self, _req: &Request, ino: Inode, reply: ReplyAttr) {
         println!("{}: ino={}", "getattr", ino);
-        let node = self.find_node(ino);
-        match node {
-            Some(entry) => reply.attr(&TTL, &entry.attr()),
-            None => reply.error(ENOENT)
-        }
+        let node = find_node_or_error!(self, ino, reply);
+        reply.attr(&TTL, &node.attr());
     }
 
     fn readdir (&mut self, _req: &Request, ino: Inode, _fh: u64, offset: u64, mut reply: ReplyDirectory) {
         println!("{}: ino={} offset={}", "readdir", ino, offset);
-        let parent_dir = match self.find_node(ino) {
-            Some(node) => node.to_dir(),
-            None => {
-                reply.error(ENOENT);
-                return;
-            }
-        };
-
+        let parent_dir = find_node_or_error!(self, ino, reply);
         if offset == 0 {
             reply.add(1, 0, FileType::Directory, ".");
             reply.add(1, 1, FileType::Directory, "..");
             let mut i = 2;
-            for (ref name, ref node) in parent_dir.borrow().nodes() {
+            for (ref name, ref node) in parent_dir.to_dir().borrow().nodes() {
                 reply.add(node.attr().ino, i, node.attr().kind, name);
                 i += 1;
             }
@@ -147,11 +137,8 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn mkdir (&mut self, _req: &Request, parent: Inode, name: &Path, mode: u32, reply: ReplyEntry) {
-        let parent_dir = match self.find_node(parent) {
-            Some(node) => node.clone(),
-            None => { reply.error(ENOENT); return; }
-        };
-
+        println!("{}: parent={} name={:?} mode={:o}", "mkdir", parent, name, mode);
+        let parent_dir = find_node_or_error!(self, parent, reply);
         let newdir = self.mkdir(parent_dir.to_dir(), name, mode);
         match newdir {
             Ok(dir) => reply.entry(&TTL, dir.borrow().attr(), 0),
@@ -160,13 +147,9 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn rmdir(&mut self, _req: &Request, parent: Inode, name: &Path, reply: ReplyEmpty) {
-        let parent_dir = match self.find_node(parent) {
-            Some(dir) => dir.clone(),
-            None => { reply.error(ENOENT); return; }
-        };
-
-        let result = self.rmdir(parent_dir.to_dir(), name);
-        match result {
+        println!("{}: parent={} name={:?}", "rmdir", parent, name);
+        let parent_dir = find_node_or_error!(self, parent, reply);
+        match self.rmdir(parent_dir.to_dir(), name) {
             Ok(_) => reply.ok(),
             Err(err) => reply.error(err)
         }

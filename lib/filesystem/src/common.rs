@@ -47,6 +47,7 @@ macro_rules! ArcRefBox {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PriorityQueue<K, T> {
     data: Vec<(K, T)>
 }
@@ -58,7 +59,7 @@ impl<K: Ord, T> PriorityQueue<K, T> {
 
     pub fn add(&mut self, k: K, t: T) {
         self.data.push((k, t));
-        self.data.sort_by(|a, b| a.0.cmp(&b.0));
+        self.data.sort_by(|a, b| b.0.cmp(&a.0));
     }
 
     pub fn find<P>(&self, predicate: P) -> Option<&(K, T)>
