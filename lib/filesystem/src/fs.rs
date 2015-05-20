@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use self::fuse::{FileAttr, FileType};
 use self::libc::consts::os::posix88::*; /* POSIX errno */
 
+use ops;
 use common::*;
 
 pub type Perm = u16;
@@ -29,7 +30,7 @@ fn fileattr_new() -> FileAttr {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Node {
     File(RcRef<File>),
     Dir(RcRef<Dir>),
@@ -74,16 +75,24 @@ impl Node {
             &Node::Dir (ref dir)  => dir.borrow().attr().clone(),
         }
     }
+
+    pub fn ops(&self) -> RcRefBox<ops::Operations> {
+        match self {
+            &Node::File(ref file) => file.borrow().ops(),
+            &Node::Dir (ref dir)  => dir.borrow().ops(),
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct File {
     name: String,
     attr: FileAttr,
+    ops: RcRefBox<ops::Operations>,
 }
 
 impl File {
-    pub fn new(name: &str, ino: Inode, perm: Perm) -> File {
+    pub fn new(name: &str, ino: Inode, perm: Perm, ops: RcRefBox<ops::Operations>) -> File {
         let mut attr = fileattr_new();
         attr.kind = FileType::RegularFile;
         attr.ino = ino;
@@ -92,22 +101,25 @@ impl File {
         File {
             name: name.to_owned(),
             attr: attr,
+            ops: ops
         }
     }
 
     pub fn name(&self) -> &str { &self.name }
     pub fn attr(&self) -> &FileAttr { &self.attr }
+    pub fn ops(&self) -> RcRefBox<ops::Operations> { self.ops.clone() }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Dir {
     name: String,
     attr: FileAttr,
-    nodes: HashMap<String, Node>
+    ops: RcRefBox<ops::Operations>,
+    nodes: HashMap<String, Node>,
 }
 
 impl Dir {
-    pub fn new(dirname: &str, ino: u64, perm: Perm) -> Dir {
+    pub fn new(dirname: &str, ino: u64, perm: Perm, ops: RcRefBox<ops::Operations>) -> Dir {
         let mut attr = fileattr_new();
         attr.kind = FileType::Directory;
         attr.ino = ino;
@@ -118,18 +130,20 @@ impl Dir {
         Dir {
             name: dirname.to_owned(),
             attr: attr,
+            ops: ops,
             nodes: HashMap::new(),
         }
     }
 
     pub fn name(&self) -> &str { &self.name }
     pub fn attr(&self) -> &FileAttr { &self.attr }
+    pub fn attr_mut(&mut self) -> &mut FileAttr { &mut self.attr }
+    pub fn ops(&self) -> RcRefBox<ops::Operations> { self.ops.clone() }
+    pub fn nodes(&self) -> &HashMap<String, Node> { &self.nodes }
 
     pub fn find_node(&self, name: &str) -> Option<&Node> {
         self.nodes.get(name)
     }
-
-    pub fn nodes(&self) -> &HashMap<String, Node> { &self.nodes }
 
     pub fn mknod(&mut self, node: Node) -> Result<()> {
         let name = node.name().to_owned();

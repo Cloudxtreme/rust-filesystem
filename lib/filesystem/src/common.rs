@@ -52,19 +52,28 @@ pub struct PriorityQueue<K, T> {
     data: Vec<(K, T)>
 }
 
+use std::slice;
+
 impl<K: Ord, T> PriorityQueue<K, T> {
     pub fn new() -> PriorityQueue<K, T> {
         PriorityQueue { data: Vec::new() }
     }
+
+    pub fn iter(&self) -> slice::Iter<(K, T)> { self.data.iter() }
 
     pub fn add(&mut self, k: K, t: T) {
         self.data.push((k, t));
         self.data.sort_by(|a, b| b.0.cmp(&a.0));
     }
 
-    pub fn find<P>(&self, predicate: P) -> Option<&(K, T)>
-        where P: for<'r> FnMut(&'r &(K, T)) -> bool
+    pub fn remove<F>(&mut self, f: F) -> Option<(K, T)>
+        where F: FnMut(&(K, T)) -> bool {
+        self.data.iter().position(f).map(|i| self.data.remove(i))
+    }
+
+    pub fn find<F>(&self, f: F) -> Option<&(K, T)>
+        where F: for<'r> FnMut(&'r &(K, T)) -> bool
     {
-        self.data.iter().find(predicate)
+        self.data.iter().find(f)
     }
 }
