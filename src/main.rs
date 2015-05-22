@@ -35,7 +35,9 @@ fn wlfs_main() -> i32 {
     }
 
     let fs = fusefs::new("wlfs");
-    fuse::mount(fs.fs, &args[1], &["allow_other".as_ref()]);
+    let options = "-o,fsname=rust-wlfs,allow_other,\
+                intr,nonempty,direct_io";
+    fuse::mount(fs.fs, &args[1], &[options.as_ref()]);
 
     return 0;
 }

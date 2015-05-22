@@ -3,7 +3,6 @@ extern crate libc;
 extern crate time;
 extern crate fuse;
 
-//use std::ffi::OsStr;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -12,22 +11,22 @@ use ops;
 use common::*;
 use fs::*;
 
-//use self::libc::c_int;                  /* type of errno */
 use self::libc::consts::os::posix88::*; /* POSIX errno */
+use self::fuse::consts::*;
 use self::fuse::{FileType};
 use self::fuse::{Request, ReplyEmpty, ReplyData, ReplyEntry, ReplyAttr};
 use self::fuse::{ReplyOpen, ReplyWrite, ReplyStatfs, ReplyCreate, ReplyDirectory};
 
+pub type Handle   = u64;
 pub type Priority = u32;
-pub type Handler  = u64;
 
 pub struct BasicFileSystem {
     root: RcRef<Dir>,   // Filesystem tree
     inodes: HashMap<Inode, Node>,
     next_inode: Inode,
     ops: PriorityQueue<Priority, RcRefBox<ops::Operations>>,
-    openfds: HashMap<Handler, RcRefBox<ops::OpenHandler>>,
-    next_handler: Handler,
+    openfds: HashMap<Handle, RcRefBox<ops::OpenHandler>>,
+    next_handle: Handle,
 }
 
 impl BasicFileSystem {
@@ -41,7 +40,7 @@ impl BasicFileSystem {
             next_inode: 2,
             ops: PriorityQueue::new(),
             openfds: HashMap::new(),
-            next_handler: 1,
+            next_handle: 1,
         };
 
         fs.register_node(Node::Dir(root.clone()));
@@ -82,7 +81,7 @@ impl BasicFileSystem {
         self.inodes.get(&ino)
     }
 
-    pub fn mknod(&mut self, parent_dir: &RcRef<Dir>, path: &Path, node: Node) -> Result<()> {
+    pub fn mknod(&mut self, parent_dir: &RcRef<Dir>, node: Node) -> Result<()> {
         parent_dir.borrow_mut().mknod(node.clone()).unwrap();   // assert if failed
         self.register_node(node.clone());
 
@@ -117,7 +116,7 @@ impl BasicFileSystem {
         let dirname = path.file_name().unwrap().to_str().unwrap();
         let newdir = RcRef!(Dir::new(dirname, inode, mode as Perm, ops));
 
-        match self.mknod(parent_dir, path, Node::Dir(newdir.clone())) {
+        match self.mknod(parent_dir, Node::Dir(newdir.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newdir) },
             Err(err) => Err(err)
         }
@@ -129,7 +128,7 @@ impl BasicFileSystem {
         let filename = path.file_name().unwrap().to_str().unwrap();
         let newfile = RcRef!(File::new(filename, inode, mode as Perm, ops));
 
-        match self.mknod(parent_dir, path, Node::File(newfile.clone())) {
+        match self.mknod(parent_dir, Node::File(newfile.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newfile) },
             Err(err) => Err(err)
         }
@@ -140,8 +139,8 @@ impl Drop for BasicFileSystem {
     fn drop(&mut self) {
         let names: Vec<_> = self.ops.iter().rev()
             .map(|&(_, ref t)| t.borrow().name()).collect();
-        for ops_name in names {
-            self.unregister_ops(&ops_name);
+        for ref ops_name in names {
+            self.unregister_ops(ops_name);
         }
     }
 }
@@ -153,7 +152,16 @@ macro_rules! find_node_or_error {
         match $dir.find_node($key) {
             Some(node) => node.clone(),
             None => { $reply.error(ENOENT); return; }
-        };
+        }
+    }
+}
+
+macro_rules! get_handler_for {
+    ($fs:expr, $fh:expr, $reply:expr) => {
+        match $fs.openfds.get(&$fh) {
+            Some(handler) => handler,
+            None => { $reply.error(EBADF); return; }
+        }
     }
 }
 
@@ -230,19 +238,52 @@ impl fuse::Filesystem for BasicFileSystem {
 
     fn open(&mut self, _req: &Request, ino: Inode, flags: Mode, reply: ReplyOpen) {
         let node = find_node_or_error!(self, ino, reply);
-        if node.attr().kind == FileType::RegularFile {
+        println!("[!] {}: file={}, {:o}", "open", node.name(), flags);
+        if node.attr().kind != FileType::Directory {
+            let handle = self.next_handle;
+
             let _ops = node.ops();
             let mut ops = _ops.borrow_mut();
-            let handler = self.next_handler;
-            let open_handler = match ops.open(self, ino, flags as Perm) {
+            let handler = match ops.open(self, ino, flags as Perm) {
                 Ok(fh) => fh,
                 Err(err) => { reply.error(err); return }
             };
-            self.openfds.insert(handler, open_handler);
-            self.next_handler += 1;
-            reply.opened(handler, flags);
+
+            self.openfds.insert(handle, handler);
+            self.next_handle += 1;
+            reply.opened(handle, flags | FOPEN_DIRECT_IO);
         } else {
             reply.error(EBADF);
+        }
+    }
+
+    fn read (&mut self, _req: &Request, _ino: u64, fh: u64, offset: u64, size: u32, reply: ReplyData) {
+        println!("[!] {}: fh={} offset={} size={}", "read", fh, offset, size);
+        let _handler = get_handler_for!(self, fh, reply);
+        let mut handler = _handler.borrow_mut();
+        match handler.read(offset, size as u64) {
+            Ok(data) => reply.data(&data),
+            Err(err) => reply.error(err)
+        }
+    }
+
+    fn write (&mut self, _req: &Request, _ino: u64, fh: u64, offset: u64, data: &[u8], _flags: u32, reply: ReplyWrite) {
+        println!("[!] {}: fh={} offset={} data.len={}", "write", fh, offset, data.len());
+        let handler = get_handler_for!(self, fh, reply);
+        let result = handler.borrow_mut().write(data, offset, data.len() as u64);
+        match result {
+            Ok(size) => reply.written(size as u32),
+            Err(err) => reply.error(err)
+        }
+    }
+
+    fn release (&mut self, _req: &Request, _ino: u64, fh: u64, flags: u32, _lock_owner: u64, flush: bool, reply: ReplyEmpty) {
+        println!("[!] {}: fh={}", "release", fh);
+        let result =
+            get_handler_for!(self, fh, reply).borrow_mut().release(flags, flush);
+        match result {
+            Ok(_) => { self.openfds.remove(&fh); reply.ok() },
+            Err(err) => reply.error(err)
         }
     }
 }

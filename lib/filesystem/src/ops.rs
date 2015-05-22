@@ -2,6 +2,7 @@
 extern crate libc;
 extern crate fuse;
 
+use std::slice;
 use std::rc::Rc;
 use std::cell::RefCell;
 use self::fuse::FileType;
@@ -36,15 +37,28 @@ pub trait Operations {
 }
 
 pub trait OpenHandler {
-    fn read(&mut self, _data: &mut [u8], _offset: u64, _size: u64) -> Result<u64>;
+    fn read(&mut self, _offset: u64, _size: u64) -> Result<Vec<u8>>;
     fn write(&mut self, _data: &[u8], _offset: u64, _size: u64) -> Result<u64>;
     fn release (&mut self, _flags: u32, _flush: bool) -> Result<()>;
 }
 
-pub struct FileOps;
+//
+// File Operations
+//
+pub struct FileOps {
+    data: RcRef<Vec<u8>>
+}
+
+impl Clone for FileOps {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
 
 impl FileOps {
-    pub fn new() -> Self { FileOps }
+    pub fn new() -> Self {
+        FileOps { data: RcRef!(Vec::new()) }
+    }
 }
 
 impl Operations for FileOps {
@@ -67,24 +81,56 @@ impl Operations for FileOps {
         println!("[!] Removing regular file: {}", node.name());
         Ok(())
     }
+
+    fn open(&mut self, _fs: &mut BasicFileSystem, ino: Inode, perm: Perm)
+        -> Result<RcRefBox<OpenHandler>>
+    {
+        Ok(FileHandler::open(ino, perm, self.data.clone()))
+    }
 }
 
-struct FileHandler;
+struct FileHandler {
+    ino: Inode,
+    perm: Perm,
+    data: RcRef<Vec<u8>>
+}
+
+impl FileHandler {
+    fn open(ino: Inode, perm: Perm, data: RcRef<Vec<u8>>) -> RcRefBox<OpenHandler> {
+        RcRefBox!(FileHandler { ino: ino, perm: perm, data: data })
+    }
+}
 
 impl OpenHandler for FileHandler {
-    fn read(&mut self, _data: &mut [u8], _offset: u64, _size: u64) -> Result<u64> {
-        Err(ENOSYS)
+    fn read(&mut self, offset: u64, size: u64) -> Result<Vec<u8>> {
+        let data = self.data.borrow();
+        let len = data.len() as u64;
+        Ok(if offset < len {
+            let begin = offset as usize;
+            let end = if offset + size >= len { len } else { offset + size } as usize;
+            (&data[begin .. end]).to_owned()
+        } else {
+            Vec::new()
+        })
     }
 
-    fn write(&mut self, _data: &[u8], _offset: u64, _size: u64) -> Result<u64> {
-        Err(ENOSYS)
+    fn write(&mut self, _data: &[u8], offset: u64, size: u64) -> Result<u64> {
+        let mut data = self.data.borrow_mut();
+        data.resize((offset + size) as usize, 0);
+        let begin = offset as usize;
+        let end = (offset + size) as usize;
+        slice::bytes::copy_memory(_data, &mut data[begin..end]);
+        Ok(size)
     }
 
     fn release (&mut self, _flags: u32, _flush: bool) -> Result<()> {
-        Err(ENOSYS)
+        Ok(())
     }
 }
 
+//
+// Directory Operation
+//
 pub struct DirOps;
 
 impl DirOps {

@@ -1,5 +1,7 @@
 
 #![feature(libc)]
+#![feature(core)]
+#![feature(collections)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
