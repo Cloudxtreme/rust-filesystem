@@ -14,6 +14,7 @@ use core::BasicFileSystem;
 
 pub trait Operations {
     fn name(&self) -> String;
+    fn copy(&self) -> RcRefBox<Operations>;
     fn install(&mut self, _fs: &mut BasicFileSystem) -> bool {
         println!("[!] {} installed", self.name());
         true
@@ -49,12 +50,6 @@ pub struct FileOps {
     data: RcRef<Vec<u8>>
 }
 
-impl Clone for FileOps {
-    fn clone(&self) -> Self {
-        Self::new()
-    }
-}
-
 impl FileOps {
     pub fn new() -> Self {
         FileOps { data: RcRef!(Vec::new()) }
@@ -64,6 +59,10 @@ impl FileOps {
 impl Operations for FileOps {
     fn name(&self) -> String {
         "filesystem.FileOps".to_owned()
+    }
+
+    fn copy(&self) -> RcRefBox<Operations> {
+        RcRefBox!(Self::new())
     }
 
     fn is_target(&mut self, _path: &Path, _kind: FileType, ) -> bool {
@@ -140,6 +139,10 @@ impl DirOps {
 impl Operations for DirOps {
     fn name(&self) -> String {
         "filesystem.DirOps".to_owned()
+    }
+
+    fn copy(&self) -> RcRefBox<Operations> {
+        RcRefBox!(Self::new())
     }
 
     fn is_target(&mut self, _path: &Path, _kind: FileType, ) -> bool {

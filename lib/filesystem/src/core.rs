@@ -114,7 +114,7 @@ impl BasicFileSystem {
         let inode = self.next_inode;
         let ops = self.get_ops(path, FileType::Directory);
         let dirname = path.file_name().unwrap().to_str().unwrap();
-        let newdir = RcRef!(Dir::new(dirname, inode, mode as Perm, ops));
+        let newdir = RcRef!(Dir::new(dirname, inode, mode as Perm, ops.borrow().copy()));
 
         match self.mknod(parent_dir, Node::Dir(newdir.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newdir) },
@@ -126,7 +126,7 @@ impl BasicFileSystem {
         let inode = self.next_inode;
         let ops = self.get_ops(path, FileType::RegularFile);
         let filename = path.file_name().unwrap().to_str().unwrap();
-        let newfile = RcRef!(File::new(filename, inode, mode as Perm, ops));
+        let newfile = RcRef!(File::new(filename, inode, mode as Perm, ops.borrow().copy()));
 
         match self.mknod(parent_dir, Node::File(newfile.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newfile) },
