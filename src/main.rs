@@ -27,8 +27,7 @@ impl fusefs {
 impl fuse::Filesystem for fusefs {
 }
 
-fn wlfs_main() -> i32 {
-    let args: Vec<_> = std::env::args().collect();
+fn wlfs_main(args: Vec<String>) -> i32 {
     if args.len() < 2 {
         println!("Usage: {} mountpoint", args[0]);
         return -1;
@@ -43,5 +42,7 @@ fn wlfs_main() -> i32 {
 }
 
 fn main() {
-    std::process::exit(wlfs_main())
+    let args = std::env::args().collect();
+    let exit_code = wlfs_main(args);
+    std::process::exit(exit_code);
 }
