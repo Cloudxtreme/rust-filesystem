@@ -76,6 +76,13 @@ impl Node {
         }
     }
 
+    pub fn set_attr(&mut self, attr: FileAttr) {
+        match self {
+            &mut Node::File(ref file) => file.borrow_mut().attr = attr,
+            &mut Node::Dir (ref dir)  => dir.borrow_mut().attr = attr,
+        }
+    }
+
     pub fn ops(&self) -> RcRefBox<ops::Operations> {
         match self {
             &Node::File(ref file) => file.borrow().ops(),

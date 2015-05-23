@@ -11,6 +11,7 @@ use ops;
 use common::*;
 use fs::*;
 
+use self::time::Timespec;
 use self::libc::consts::os::posix88::*; /* POSIX errno */
 use self::fuse::consts::*;
 use self::fuse::{FileType};
@@ -145,7 +146,7 @@ impl Drop for BasicFileSystem {
     }
 }
 
-const TTL: time::Timespec = time::Timespec { sec: 0, nsec: 0 };
+const TTL: Timespec = Timespec { sec: 0, nsec: 0 };
 
 macro_rules! find_node_or_error {
     ($dir:expr, $key:expr, $reply:expr) => {
@@ -161,6 +162,14 @@ macro_rules! get_handler_for {
         match $fs.openfds.get(&$fh) {
             Some(handler) => handler,
             None => { $reply.error(EBADF); return; }
+        }
+    }
+}
+
+macro_rules! set_attr {
+    ($attr:expr, $name:ident, $opt:expr) => {
+        if $opt.is_some() {
+            $attr.$name = $opt.unwrap();
         }
     }
 }
@@ -181,6 +190,26 @@ impl fuse::Filesystem for BasicFileSystem {
         println!("{}: ino={}", "getattr", ino);
         let node = find_node_or_error!(self, ino, reply);
         reply.attr(&TTL, &node.attr());
+    }
+
+    fn setattr (&mut self, _req: &Request, ino: u64, mode: Option<u32>, uid: Option<u32>, gid: Option<u32>,
+        size: Option<u64>, atime: Option<Timespec>, mtime: Option<Timespec>, _fh: Option<u64>, crtime: Option<Timespec>,
+        chgtime: Option<Timespec>, _bkuptime: Option<Timespec>, flags: Option<u32>, reply: ReplyAttr) {
+        let mut node = find_node_or_error!(self, ino, reply);
+        let mut attr = node.attr();
+
+        set_attr!(attr, size, size);
+        set_attr!(attr, atime, atime);
+        set_attr!(attr, mtime, mtime);
+        set_attr!(attr, ctime, chgtime);
+        set_attr!(attr, crtime, crtime);
+        set_attr!(attr, perm, mode.map(|n| n as u16));
+        set_attr!(attr, uid, uid);
+        set_attr!(attr, gid, gid);
+        set_attr!(attr, flags, flags);
+
+        reply.attr(&TTL, &attr);
+        node.set_attr(attr);
     }
 
     fn readdir (&mut self, _req: &Request, ino: Inode, _fh: u64, offset: u64, mut reply: ReplyDirectory) {
@@ -235,6 +264,8 @@ impl fuse::Filesystem for BasicFileSystem {
             Err(err) => reply.error(err)
         }
     }
+
+
 
     fn open(&mut self, _req: &Request, ino: Inode, flags: Mode, reply: ReplyOpen) {
         let node = find_node_or_error!(self, ino, reply);
