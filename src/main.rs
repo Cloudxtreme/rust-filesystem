@@ -33,11 +33,12 @@ fn wlfs_main(args: Vec<String>) -> i32 {
         return -1;
     }
 
-    let fs = fusefs::new("wlfs");
-    let options = "-o,fsname=rust-wlfs,allow_other,\
-                intr,nonempty,direct_io";
-    fuse::mount(fs.fs, &args[1], &[options.as_ref()]);
+    let fs = fusefs::new("rust-wlfs");
+    let options = format!(
+        "-o,fsname={},allow_other,\
+        intr,nonempty,direct_io", fs.name);
 
+    fuse::mount(fs.fs, &args[1], &[options.as_ref()]);
     return 0;
 }
 

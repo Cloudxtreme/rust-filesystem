@@ -265,7 +265,19 @@ impl fuse::Filesystem for BasicFileSystem {
         }
     }
 
-
+    fn rename(&mut self, _req: &Request, parent: u64, name: &Path, newparent: u64, newname: &Path, reply: ReplyEmpty) {
+        println!("{}: parent={} newparent={} path={:?} newpath={:?}",
+            "rename", parent, newparent, name, newname);
+        let name = name.file_name().unwrap().to_str().unwrap();
+        let newname = newname.file_name().unwrap().to_str().unwrap();
+        let parent_dir = find_node_or_error!(self, parent, reply);
+        let new_parent_dir = find_node_or_error!(self, newparent, reply);
+        let mut node = find_node_or_error!(parent_dir.to_dir().borrow(), name, reply);
+        node.set_name(newname);
+        parent_dir.to_dir().borrow_mut().rmnod(name, node.attr().kind);
+        new_parent_dir.to_dir().borrow_mut().mknod(node);
+        reply.ok();
+    }
 
     fn open(&mut self, _req: &Request, ino: Inode, flags: Mode, reply: ReplyOpen) {
         let node = find_node_or_error!(self, ino, reply);
@@ -316,5 +328,13 @@ impl fuse::Filesystem for BasicFileSystem {
             Ok(_) => { self.openfds.remove(&fh); reply.ok() },
             Err(err) => reply.error(err)
         }
+    }
+
+    fn flush(&mut self, _req: &Request, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
+        reply.ok();
+    }
+
+    fn fsync(&mut self, _req: &Request, _ino: u64, _fh: u64, _datasync: bool, reply: ReplyEmpty) {
+        reply.ok();
     }
 }
