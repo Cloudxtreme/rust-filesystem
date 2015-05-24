@@ -66,7 +66,7 @@ impl Node {
         match self {
             &Node::File(ref file) => file.borrow().name().to_owned(),
             &Node::Dir (ref dir)  => dir.borrow().name().to_owned(),
-        }.clone()
+        }
     }
 
     pub fn set_name(&mut self, name: &str) {

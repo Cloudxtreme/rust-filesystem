@@ -47,6 +47,16 @@ macro_rules! ArcRefBox {
     }
 }
 
+#[macro_export]
+macro_rules! set_if_some {
+    ($data:expr, $opt:expr) => {
+        if $opt.is_some() {
+            $data = $opt.unwrap();
+        }
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct PriorityQueue<K, T> {
     data: Vec<(K, T)>

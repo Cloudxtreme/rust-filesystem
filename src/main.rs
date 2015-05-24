@@ -3,13 +3,13 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 extern crate libc;
 extern crate time;
 extern crate fuse;
 extern crate filesystem;
-#[macro_use]
-extern crate log;
-extern crate env_logger;
 
 use filesystem::*;
 
@@ -25,9 +25,6 @@ impl fusefs {
             fs: filesystem::BasicFileSystem::new(),
         }
     }
-}
-
-impl fuse::Filesystem for fusefs {
 }
 
 fn wlfs_main(args: Vec<String>) -> i32 {

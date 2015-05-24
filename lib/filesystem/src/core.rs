@@ -32,8 +32,7 @@ pub struct BasicFileSystem {
 
 impl BasicFileSystem {
     pub fn new() -> BasicFileSystem {
-        let dirops: RcRefBox<ops::Operations> = RcRefBox!(ops::FileOps::new());
-        
+        let dirops: RcRefBox<ops::Operations> = RcRefBox!(ops::DirOps::new());
         let root = RcRef!(Dir::new("/", fuse::FUSE_ROOT_ID, 0o755, dirops.clone()));
         let mut fs = BasicFileSystem {
             root: root.clone(),
@@ -44,15 +43,15 @@ impl BasicFileSystem {
             next_handle: 1,
         };
 
-        fs.register_node(Node::Dir(root.clone()));
+        fs.register_node(Node::Dir(root));
         fs.register_ops(Priority::min_value(), dirops);
-        fs.register_ops(Priority::min_value(), RcRefBox!(ops::DirOps::new()));
+        fs.register_ops(Priority::min_value(), RcRefBox!(ops::FileOps::new()));
         fs
     }
 
     fn get_ops(&self, path: &Path, kind: FileType) -> RcRefBox<ops::Operations> {
         // Do unwrap() due to at least default operations
-        // (FileOps, DirOps) must be available at the point of the new()
+        // (FileOps, DirOps) must be available after new()
         self.ops.find(|&&(_, ref t)| t.borrow_mut().is_target(path, kind)).unwrap().1.clone()
     }
 
@@ -99,14 +98,16 @@ impl BasicFileSystem {
     pub fn rmnod(&mut self, _parent_dir: &RcRef<Dir>, path: &Path, kind: FileType) -> Result<()> {
         let mut parent_dir = _parent_dir.borrow_mut();
         let name = path.file_name().unwrap().to_str().unwrap();
-        let result = {
+        let (inode, result) = {
             let node = try!(parent_dir.find_node(name).ok_or(ENOENT));
+            let inode = node.attr().ino;
             let _ops = node.ops();
             let mut ops = _ops.borrow_mut();
-            ops.rmnod(self, node.attr().ino)
+            (inode, ops.rmnod(self, inode))
         };
         if result.is_ok() {
             parent_dir.rmnod(name, kind).unwrap();  // assert if failed
+            self.unregister_node(inode);
         }
         result
     }
@@ -166,14 +167,6 @@ macro_rules! get_handler_for {
     }
 }
 
-macro_rules! set_attr {
-    ($attr:expr, $name:ident, $opt:expr) => {
-        if $opt.is_some() {
-            $attr.$name = $opt.unwrap();
-        }
-    }
-}
-
 impl fuse::Filesystem for BasicFileSystem {
     fn init (&mut self, _req: &Request) -> Result<()> { Ok(()) }
     fn destroy (&mut self, _req: &Request) {}
@@ -203,15 +196,15 @@ impl fuse::Filesystem for BasicFileSystem {
         let mut node = find_node_or_error!(self, ino, reply);
         let mut attr = node.attr();
 
-        set_attr!(attr, size, size);
-        set_attr!(attr, atime, atime);
-        set_attr!(attr, mtime, mtime);
-        set_attr!(attr, ctime, chgtime);
-        set_attr!(attr, crtime, crtime);
-        set_attr!(attr, perm, mode.map(|n| n as u16));
-        set_attr!(attr, uid, uid);
-        set_attr!(attr, gid, gid);
-        set_attr!(attr, flags, flags);
+        set_if_some!(attr.size, size);
+        set_if_some!(attr.atime, atime);
+        set_if_some!(attr.mtime, mtime);
+        set_if_some!(attr.ctime, chgtime);
+        set_if_some!(attr.crtime, crtime);
+        set_if_some!(attr.perm, mode.map(|n| n as u16));
+        set_if_some!(attr.uid, uid);
+        set_if_some!(attr.gid, gid);
+        set_if_some!(attr.flags, flags);
 
         reply.attr(&TTL, &attr);
         node.set_attr(attr);
