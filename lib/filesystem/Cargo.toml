@@ -9,6 +9,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 time = "*"
+log = "*"
 
 [dependencies.fuse]
 git = "https://github.com/zargony/rust-fuse.git"

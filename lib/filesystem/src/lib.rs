@@ -5,6 +5,9 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+#[macro_use]
+extern crate log;
+
 pub use core::BasicFileSystem;
 
 mod common;

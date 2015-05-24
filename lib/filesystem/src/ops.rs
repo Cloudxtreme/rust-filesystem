@@ -16,11 +16,11 @@ pub trait Operations {
     fn name(&self) -> &str;
     fn new_ops(&self) -> RcRefBox<Operations>;
     fn install(&mut self, _fs: &mut BasicFileSystem) -> bool {
-        println!("[!] {} installed", self.name());
+        info!("{} installed", self.name());
         true
     }
     fn uninstall(&mut self, _fs: &mut BasicFileSystem) -> bool {
-        println!("[!] {} installed", self.name());
+        info!("{} uninstalled", self.name());
         true
     }
     fn is_target(&mut self, _path: &Path, _kind: FileType) -> bool { false }

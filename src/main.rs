@@ -7,6 +7,9 @@ extern crate libc;
 extern crate time;
 extern crate fuse;
 extern crate filesystem;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 
 use filesystem::*;
 
@@ -33,10 +36,13 @@ fn wlfs_main(args: Vec<String>) -> i32 {
         return -1;
     }
 
+    env_logger::init().unwrap();
     let fs = fusefs::new("rust-wlfs");
     let options = format!(
         "-o,fsname={},allow_other,\
         intr,nonempty,direct_io", fs.name);
+
+    info!("mount options: {}", options);
 
     fuse::mount(fs.fs, &args[1], &[options.as_ref()]);
     return 0;

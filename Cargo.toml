@@ -9,6 +9,8 @@ name = "wlfs"
 
 [dependencies]
 time = "*"
+log = "*"
+env_logger = "*"
 
 [dependencies.filesystem]
 path = "lib/filesystem/"
