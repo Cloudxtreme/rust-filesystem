@@ -115,7 +115,7 @@ impl BasicFileSystem {
         let inode = self.next_inode;
         let ops = self.get_ops(path, FileType::Directory);
         let dirname = path.file_name().unwrap().to_str().unwrap();
-        let newdir = RcRef!(Dir::new(dirname, inode, mode as Perm, ops.borrow().copy()));
+        let newdir = RcRef!(Dir::new(dirname, inode, mode as Perm, ops.borrow().new_ops()));
 
         match self.mknod(parent_dir, Node::Dir(newdir.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newdir) },
@@ -127,7 +127,7 @@ impl BasicFileSystem {
         let inode = self.next_inode;
         let ops = self.get_ops(path, FileType::RegularFile);
         let filename = path.file_name().unwrap().to_str().unwrap();
-        let newfile = RcRef!(File::new(filename, inode, mode as Perm, ops.borrow().copy()));
+        let newfile = RcRef!(File::new(filename, inode, mode as Perm, ops.borrow().new_ops()));
 
         match self.mknod(parent_dir, Node::File(newfile.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newfile) },
@@ -139,7 +139,7 @@ impl BasicFileSystem {
 impl Drop for BasicFileSystem {
     fn drop(&mut self) {
         let names: Vec<_> = self.ops.iter().rev()
-            .map(|&(_, ref t)| t.borrow().name()).collect();
+            .map(|&(_, ref t)| t.borrow().name().to_owned()).collect();
         for ref ops_name in names {
             self.unregister_ops(ops_name);
         }
@@ -189,7 +189,12 @@ impl fuse::Filesystem for BasicFileSystem {
     fn getattr (&mut self, _req: &Request, ino: Inode, reply: ReplyAttr) {
         println!("{}: ino={}", "getattr", ino);
         let node = find_node_or_error!(self, ino, reply);
-        reply.attr(&TTL, &node.attr());
+        let _ops = node.ops();
+        let mut ops = _ops.borrow_mut();
+        match ops.getattr(node) {
+            Ok(ref attr) => reply.attr(&TTL, attr),
+            Err(err) => reply.error(err)
+        }
     }
 
     fn setattr (&mut self, _req: &Request, ino: u64, mode: Option<u32>, uid: Option<u32>, gid: Option<u32>,
@@ -281,7 +286,7 @@ impl fuse::Filesystem for BasicFileSystem {
 
     fn open(&mut self, _req: &Request, ino: Inode, flags: Mode, reply: ReplyOpen) {
         let node = find_node_or_error!(self, ino, reply);
-        println!("[!] {}: file={}, {:o}", "open", node.name(), flags);
+        print!("[!] {}: file={}, {:o} ", "open", node.name(), flags);
         if node.attr().kind != FileType::Directory {
             let handle = self.next_handle;
 
@@ -295,6 +300,8 @@ impl fuse::Filesystem for BasicFileSystem {
             self.openfds.insert(handle, handler);
             self.next_handle += 1;
             reply.opened(handle, flags | FOPEN_DIRECT_IO);
+
+            println!("handle={}", handle);
         } else {
             reply.error(EBADF);
         }

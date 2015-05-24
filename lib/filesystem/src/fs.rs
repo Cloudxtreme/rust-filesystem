@@ -107,10 +107,12 @@ pub struct File {
 
 impl File {
     pub fn new(name: &str, ino: Inode, perm: Perm, ops: RcRefBox<ops::Operations>) -> File {
-        let mut attr = fileattr_new();
-        attr.kind = FileType::RegularFile;
-        attr.ino = ino;
-        attr.perm = perm;
+        let attr = FileAttr {
+            ino: ino,
+            kind: FileType::RegularFile,
+            perm: perm,
+            ..fileattr_new()
+        };
 
         File {
             name: name.to_owned(),
@@ -134,12 +136,14 @@ pub struct Dir {
 
 impl Dir {
     pub fn new(dirname: &str, ino: u64, perm: Perm, ops: RcRefBox<ops::Operations>) -> Dir {
-        let mut attr = fileattr_new();
-        attr.kind = FileType::Directory;
-        attr.ino = ino;
-        attr.perm = perm;
-        attr.nlink = 2;
-        attr.size = 4096;
+        let attr = FileAttr {
+            kind: FileType::Directory,
+            ino: ino,
+            perm: perm,
+            nlink: 2,
+            size: 4096,
+            ..fileattr_new()
+        };
 
         Dir {
             name: dirname.to_owned(),

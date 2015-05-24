@@ -5,7 +5,7 @@ extern crate fuse;
 use std::slice;
 use std::rc::Rc;
 use std::cell::RefCell;
-use self::fuse::FileType;
+use self::fuse::{FileType, FileAttr};
 use self::libc::consts::os::posix88::*; /* POSIX errno */
 
 use common::*;
@@ -13,8 +13,8 @@ use fs::*;
 use core::BasicFileSystem;
 
 pub trait Operations {
-    fn name(&self) -> String;
-    fn copy(&self) -> RcRefBox<Operations>;
+    fn name(&self) -> &str;
+    fn new_ops(&self) -> RcRefBox<Operations>;
     fn install(&mut self, _fs: &mut BasicFileSystem) -> bool {
         println!("[!] {} installed", self.name());
         true
@@ -23,7 +23,10 @@ pub trait Operations {
         println!("[!] {} installed", self.name());
         true
     }
-    fn is_target(&mut self, _path: &Path, _kind: FileType, ) -> bool { false }
+    fn is_target(&mut self, _path: &Path, _kind: FileType) -> bool { false }
+    fn getattr(&mut self, node: Node) -> Result<FileAttr> {
+        Ok(node.attr())
+    }
     fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
         Err(ENOSYS)
     }
@@ -57,27 +60,30 @@ impl FileOps {
 }
 
 impl Operations for FileOps {
-    fn name(&self) -> String {
-        "filesystem.FileOps".to_owned()
+    fn name(&self) -> &str {
+        "filesystem.FileOps"
     }
 
-    fn copy(&self) -> RcRefBox<Operations> {
+    fn new_ops(&self) -> RcRefBox<Operations> {
         RcRefBox!(Self::new())
     }
 
-    fn is_target(&mut self, _path: &Path, _kind: FileType, ) -> bool {
-        _kind == FileType::RegularFile
+    fn is_target(&mut self, _path: &Path, kind: FileType) -> bool {
+        kind == FileType::RegularFile
     }
 
-    fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
-        let node = try!(fs.find_node(ino).ok_or(ENOENT));
-        println!("[!] Created regular file: {}", node.name());
+    fn getattr(&mut self, node: Node) -> Result<FileAttr> {
+        Ok(FileAttr {
+            size: self.data.borrow().len() as u64,
+            ..node.attr()
+        })
+    }
+
+    fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
         Ok(())
     }
 
-    fn rmnod(&mut self, fs: &mut BasicFileSystem, ino: Inode) -> Result<()> {
-        let node = try!(fs.find_node(ino).ok_or(ENOENT));
-        println!("[!] Removing regular file: {}", node.name());
+    fn rmnod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode) -> Result<()> {
         Ok(())
     }
 
@@ -104,21 +110,26 @@ impl OpenHandler for FileHandler {
     fn read(&mut self, offset: u64, size: u64) -> Result<Vec<u8>> {
         let data = self.data.borrow();
         let len = data.len() as u64;
-        Ok(if offset < len {
-            let begin = offset as usize;
-            let end = if offset + size >= len { len } else { offset + size } as usize;
-            (&data[begin .. end]).to_owned()
-        } else {
+
+        Ok(if offset > len {
             Vec::new()
+        } else {
+            let begin = offset as usize;
+            let end = if offset + size < len { offset + size } else { len } as usize;
+            (&data[begin .. end]).to_owned()
         })
     }
 
-    fn write(&mut self, _data: &[u8], offset: u64, size: u64) -> Result<u64> {
-        let mut data = self.data.borrow_mut();
-        data.resize((offset + size) as usize, 0);
+    fn write(&mut self, src: &[u8], offset: u64, size: u64) -> Result<u64> {
         let begin = offset as usize;
         let end = (offset + size) as usize;
-        slice::bytes::copy_memory(_data, &mut data[begin..end]);
+        let mut dst = self.data.borrow_mut();
+
+        if end > dst.len() {
+            dst.resize(end, 0);
+        }
+
+        slice::bytes::copy_memory(src, &mut dst[begin..end]);
         Ok(size)
     }
 
@@ -137,27 +148,23 @@ impl DirOps {
 }
 
 impl Operations for DirOps {
-    fn name(&self) -> String {
-        "filesystem.DirOps".to_owned()
+    fn name(&self) -> &str {
+        "filesystem.DirOps"
     }
 
-    fn copy(&self) -> RcRefBox<Operations> {
+    fn new_ops(&self) -> RcRefBox<Operations> {
         RcRefBox!(Self::new())
     }
 
-    fn is_target(&mut self, _path: &Path, _kind: FileType, ) -> bool {
-        _kind == FileType::Directory
+    fn is_target(&mut self, _path: &Path, kind: FileType) -> bool {
+        kind == FileType::Directory
     }
 
-    fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
-        let node = try!(fs.find_node(ino).ok_or(ENOENT));
-        println!("[!] Created directory: {}", node.name());
+    fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
         Ok(())
     }
 
-    fn rmnod(&mut self, fs: &mut BasicFileSystem, ino: Inode) -> Result<()> {
-        let node = try!(fs.find_node(ino).ok_or(ENOENT));
-        println!("[!] Removing directory: {}", node.name());
+    fn rmnod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode) -> Result<()> {
         Ok(())
     }
 }
