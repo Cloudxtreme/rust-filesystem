@@ -33,7 +33,6 @@ fn wlfs_main(args: Vec<String>) -> i32 {
         return -1;
     }
 
-    env_logger::init().unwrap();
     let fs = fusefs::new("rust-wlfs");
     let options = format!(
         "-o,fsname={},allow_other,\
@@ -46,6 +45,7 @@ fn wlfs_main(args: Vec<String>) -> i32 {
 }
 
 fn main() {
+    env_logger::init().unwrap();
     let args = std::env::args().collect();
     let exit_code = wlfs_main(args);
     std::process::exit(exit_code);

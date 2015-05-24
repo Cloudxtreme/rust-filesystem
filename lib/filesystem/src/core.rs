@@ -172,7 +172,6 @@ impl fuse::Filesystem for BasicFileSystem {
     fn destroy (&mut self, _req: &Request) {}
 
     fn lookup (&mut self, _req: &Request, parent: Inode, name: &Path, reply: ReplyEntry) {
-        trace!("{}: parent={} name={:?}", "lookup", parent, name);
         let node = find_node_or_error!(self, parent, reply);
         let parent_dir = node.to_dir().borrow();
         let entry = find_node_or_error!(parent_dir, name.to_str().unwrap(), reply);
@@ -180,7 +179,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn getattr (&mut self, _req: &Request, ino: Inode, reply: ReplyAttr) {
-        trace!("{}: ino={}", "getattr", ino);
         let node = find_node_or_error!(self, ino, reply);
         let _ops = node.ops();
         let mut ops = _ops.borrow_mut();
@@ -211,7 +209,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn readdir (&mut self, _req: &Request, ino: Inode, _fh: u64, offset: u64, mut reply: ReplyDirectory) {
-        trace!("{}: ino={} offset={}", "readdir", ino, offset);
         let parent_dir = find_node_or_error!(self, ino, reply);
         if offset == 0 {
             reply.add(1, 0, FileType::Directory, ".");
@@ -226,7 +223,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn mkdir (&mut self, _req: &Request, parent: Inode, name: &Path, mode: Mode, reply: ReplyEntry) {
-        trace!("{}: parent={} name={:?} mode={:o}", "mkdir", parent, name, mode);
         let parent_dir = find_node_or_error!(self, parent, reply);
         let newdir = self.mkdir(parent_dir.to_dir(), name, mode);
         match newdir {
@@ -236,7 +232,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn rmdir(&mut self, _req: &Request, parent: Inode, name: &Path, reply: ReplyEmpty) {
-        trace!("{}: parent={} name={:?}", "rmdir", parent, name);
         let parent_dir = find_node_or_error!(self, parent, reply);
         match self.rmnod(parent_dir.to_dir(), name, FileType::Directory) {
             Ok(_) => reply.ok(),
@@ -245,7 +240,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn mknod(&mut self, _req: &Request, parent: Inode, name: &Path, mode: Mode, _rdev: u32, reply: ReplyEntry) {
-        trace!("{}: parent={} name={:?} mode={:o}", "mknod", parent, name, mode);
         let parent_dir = find_node_or_error!(self, parent, reply);
         let newfile = self.mkfile(parent_dir.to_dir(), name, mode);
         match newfile {
@@ -255,7 +249,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn unlink(&mut self, _req: &Request, parent: Inode, name: &Path, reply: ReplyEmpty) {
-        trace!("{}: parent={} name={:?}", "unlink", parent, name);
         let parent_dir = find_node_or_error!(self, parent, reply);
         match self.rmnod(parent_dir.to_dir(), name, FileType::RegularFile) {
             Ok(_) => reply.ok(),
@@ -264,8 +257,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn rename(&mut self, _req: &Request, parent: u64, name: &Path, newparent: u64, newname: &Path, reply: ReplyEmpty) {
-        trace!("{}: parent={} newparent={} path={:?} newpath={:?}",
-            "rename", parent, newparent, name, newname);
         let name = name.file_name().unwrap().to_str().unwrap();
         let newname = newname.file_name().unwrap().to_str().unwrap();
         let parent_dir = find_node_or_error!(self, parent, reply);
@@ -279,7 +270,6 @@ impl fuse::Filesystem for BasicFileSystem {
 
     fn open(&mut self, _req: &Request, ino: Inode, flags: Mode, reply: ReplyOpen) {
         let node = find_node_or_error!(self, ino, reply);
-        trace!("{}: file={}, {:o} ", "open", node.name(), flags);
         if node.attr().kind != FileType::Directory {
             let handle = self.next_handle;
 
@@ -293,15 +283,12 @@ impl fuse::Filesystem for BasicFileSystem {
             self.openfds.insert(handle, handler);
             self.next_handle += 1;
             reply.opened(handle, flags | FOPEN_DIRECT_IO);
-
-            trace!("handle={}", handle);
         } else {
             reply.error(EBADF);
         }
     }
 
     fn read (&mut self, _req: &Request, _ino: u64, fh: u64, offset: u64, size: u32, reply: ReplyData) {
-        trace!("{}: fh={} offset={} size={}", "read", fh, offset, size);
         let _handler = get_handler_for!(self, fh, reply);
         let mut handler = _handler.borrow_mut();
         match handler.read(offset, size as u64) {
@@ -311,7 +298,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn write (&mut self, _req: &Request, _ino: u64, fh: u64, offset: u64, data: &[u8], _flags: u32, reply: ReplyWrite) {
-        trace!("{}: fh={} offset={} data.len={}", "write", fh, offset, data.len());
         let handler = get_handler_for!(self, fh, reply);
         let result = handler.borrow_mut().write(data, offset, data.len() as u64);
         match result {
@@ -321,7 +307,6 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn release (&mut self, _req: &Request, _ino: u64, fh: u64, flags: u32, _lock_owner: u64, flush: bool, reply: ReplyEmpty) {
-        trace!("{}: fh={}", "release", fh);
         let result =
             get_handler_for!(self, fh, reply).borrow_mut().release(flags, flush);
         match result {
