@@ -89,7 +89,7 @@ impl BasicFileSystem {
         let mut ops = _ops.borrow_mut();
         let result = ops.mknod(self, node.attr().ino, node.attr().perm);
         if result.is_err() {
-            parent_dir.borrow_mut().rmnod(&node.name(), node.attr().kind);
+            let _ = parent_dir.borrow_mut().rmnod(&node.name(), node.attr().kind);
             self.unregister_node(node.attr().ino);
         }
         result
@@ -262,9 +262,11 @@ impl fuse::Filesystem for BasicFileSystem {
         let parent_dir = find_node_or_error!(self, parent, reply);
         let new_parent_dir = find_node_or_error!(self, newparent, reply);
         let mut node = find_node_or_error!(parent_dir.to_dir().borrow(), name, reply);
+
         node.set_name(newname);
-        parent_dir.to_dir().borrow_mut().rmnod(name, node.attr().kind);
-        new_parent_dir.to_dir().borrow_mut().mknod(node);
+        let _ = parent_dir.to_dir().borrow_mut().rmnod(name, node.attr().kind);
+        let _ = new_parent_dir.to_dir().borrow_mut().mknod(node);
+
         reply.ok();
     }
 
