@@ -5,6 +5,7 @@ extern crate libc;
 
 use std::path;
 pub type Path = path::Path;
+pub type PathBuf = path::PathBuf;
 
 use std::result;
 use self::libc::c_int;  /* type of errno */

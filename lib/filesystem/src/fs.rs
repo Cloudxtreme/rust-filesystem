@@ -14,7 +14,7 @@ pub type Perm = u16;
 pub type Mode = u32;
 pub type Inode = u64;
 
-fn fileattr_new() -> FileAttr {
+pub fn fileattr_new() -> FileAttr {
     let current_time = time::get_time();
     FileAttr {
         ino: 0, size: 0,
@@ -30,7 +30,7 @@ fn fileattr_new() -> FileAttr {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Node {
     File(RcRef<File>),
     Dir(RcRef<Dir>),
@@ -90,6 +90,20 @@ impl Node {
         }
     }
 
+    pub fn parent(&self) -> Option<Inode> {
+        match self {
+            &Node::File(ref file) => file.borrow().parent,
+            &Node::Dir (ref dir)  => dir.borrow().parent,
+        }
+    }
+
+    pub fn set_parent(&mut self, parent: Option<Inode>) {
+        match self {
+            &mut Node::File(ref file) => file.borrow_mut().parent = parent,
+            &mut Node::Dir (ref dir)  => dir.borrow_mut().parent = parent,
+        }
+    }
+
     pub fn ops(&self) -> RcRefBox<ops::Operations> {
         match self {
             &Node::File(ref file) => file.borrow().ops(),
@@ -98,25 +112,21 @@ impl Node {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct File {
     name: String,
     attr: FileAttr,
+    parent: Option<Inode>,
     ops: RcRefBox<ops::Operations>,
 }
 
 impl File {
-    pub fn new(name: &str, ino: Inode, perm: Perm, ops: RcRefBox<ops::Operations>) -> File {
-        let attr = FileAttr {
-            ino: ino,
-            kind: FileType::RegularFile,
-            perm: perm,
-            ..fileattr_new()
-        };
-
+    pub fn new(name: &str, attr: FileAttr, parent: Option<Inode>,
+               ops: RcRefBox<ops::Operations>) -> File {
         File {
             name: name.to_owned(),
-            attr: attr,
+            attr: FileAttr { kind: FileType::RegularFile, ..attr },
+            parent: parent,
             ops: ops
         }
     }
@@ -126,28 +136,28 @@ impl File {
     pub fn ops(&self) -> RcRefBox<ops::Operations> { self.ops.clone() }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Dir {
     name: String,
     attr: FileAttr,
+    parent: Option<Inode>,
     ops: RcRefBox<ops::Operations>,
     nodes: HashMap<String, Node>,
 }
 
 impl Dir {
-    pub fn new(dirname: &str, ino: u64, perm: Perm, ops: RcRefBox<ops::Operations>) -> Dir {
-        let attr = FileAttr {
+    pub fn new(dirname: &str, attr: FileAttr, parent:
+               Option<Inode>, ops: RcRefBox<ops::Operations>) -> Dir {
+        let newattr = FileAttr {
             kind: FileType::Directory,
-            ino: ino,
-            perm: perm,
             nlink: 2,
             size: 4096,
-            ..fileattr_new()
+            ..attr
         };
-
         Dir {
             name: dirname.to_owned(),
-            attr: attr,
+            attr: newattr,
+            parent: parent,
             ops: ops,
             nodes: HashMap::new(),
         }
@@ -163,11 +173,12 @@ impl Dir {
         self.nodes.get(name)
     }
 
-    pub fn mknod(&mut self, node: Node) -> Result<()> {
-        let name = node.name().to_owned();
+    pub fn mknod(&mut self, mut node: Node) -> Result<()> {
+        let name = node.name();
         if self.nodes.contains_key(&name) {
             Err(EEXIST)
         } else {
+            node.set_parent(Some(self.attr.ino));
             self.nodes.insert(name, node);
             Ok(())
         }

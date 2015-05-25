@@ -8,8 +8,8 @@ use std::cell::RefCell;
 use self::fuse::{FileType, FileAttr};
 use self::libc::consts::os::posix88::*; /* POSIX errno */
 
-use common::*;
 use fs::*;
+use common::*;
 use core::BasicFileSystem;
 
 pub trait Operations {
@@ -40,7 +40,16 @@ pub trait Operations {
     }
 }
 
+use std::fmt;
+
+impl fmt::Debug for Operations {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Operations {{ name: {} }}", self.name())
+    }
+}
+
 pub trait OpenHandler {
+    fn name(&self) -> &str;
     fn read(&mut self, _offset: u64, _size: u64) -> Result<Vec<u8>>;
     fn write(&mut self, _data: &[u8], _offset: u64, _size: u64) -> Result<u64>;
     fn release (&mut self, _flags: u32, _flush: bool) -> Result<()>;
@@ -107,6 +116,10 @@ impl FileHandler {
 }
 
 impl OpenHandler for FileHandler {
+    fn name(&self) -> &str {
+        "FileOps.FileHandler"
+    }
+
     fn read(&mut self, offset: u64, size: u64) -> Result<Vec<u8>> {
         let data = self.data.borrow();
         let len = data.len() as u64;

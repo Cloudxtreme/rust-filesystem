@@ -14,7 +14,7 @@ use fs::*;
 use self::time::Timespec;
 use self::libc::consts::os::posix88::*; /* POSIX errno */
 use self::fuse::consts::*;
-use self::fuse::{FileType};
+use self::fuse::{FileType, FileAttr};
 use self::fuse::{Request, ReplyEmpty, ReplyData, ReplyEntry, ReplyAttr};
 use self::fuse::{ReplyOpen, ReplyWrite, ReplyStatfs, ReplyCreate, ReplyDirectory};
 
@@ -30,10 +30,27 @@ pub struct BasicFileSystem {
     next_handle: Handle,
 }
 
+pub fn get_path(fs: &BasicFileSystem, node: &Node) -> PathBuf {
+    match node.parent() {
+        Some(parent) => {
+            let parent_node = fs.find_node(parent).unwrap();
+            let mut path = get_path(fs, &parent_node);
+            path.push(node.name());
+            path
+        },
+        None => PathBuf::from("/"),
+    }
+}
+
 impl BasicFileSystem {
     pub fn new() -> BasicFileSystem {
+        let attr = FileAttr {
+            ino: fuse::FUSE_ROOT_ID,
+            perm: 0o755,
+            ..fileattr_new()
+        };
         let dirops = ops::DirOps::new();
-        let root = RcRef!(Dir::new("/", fuse::FUSE_ROOT_ID, 0o755, dirops.clone()));
+        let root = RcRef!(Dir::new("/", attr, None, dirops.clone()));
         let mut fs = BasicFileSystem {
             root: root.clone(),
             inodes: HashMap::new(),
@@ -82,12 +99,13 @@ impl BasicFileSystem {
     }
 
     pub fn mknod(&mut self, parent_dir: &RcRef<Dir>, node: Node) -> Result<()> {
-        parent_dir.borrow_mut().mknod(node.clone()).unwrap();   // assert if failed
+        try!(parent_dir.borrow_mut().mknod(node.clone()));
         self.register_node(node.clone());
 
         let _ops = node.ops();
         let mut ops = _ops.borrow_mut();
         let result = ops.mknod(self, node.attr().ino, node.attr().perm);
+
         if result.is_err() {
             let _ = parent_dir.borrow_mut().rmnod(&node.name(), node.attr().kind);
             self.unregister_node(node.attr().ino);
@@ -113,10 +131,21 @@ impl BasicFileSystem {
     }
 
     pub fn mkdir(&mut self, parent_dir: &RcRef<Dir>, path: &Path, mode: u32) -> Result<RcRef<Dir>> {
-        let inode = self.next_inode;
-        let ops = self.get_ops(path, FileType::Directory);
+        let mut fullpath = get_path(self, &Node::Dir(parent_dir.clone()));
+        fullpath.push(path);
+
+        let ops = self.get_ops(&fullpath, FileType::Directory);
         let dirname = path.file_name().unwrap().to_str().unwrap();
-        let newdir = RcRef!(Dir::new(dirname, inode, mode as Perm, ops.borrow().new_ops()));
+        let attr = FileAttr {
+            ino: self.next_inode,
+            perm: mode as Perm,
+            ..fileattr_new()
+        };
+        let newdir = RcRef!(Dir::new(
+            dirname, attr, None, ops.borrow().new_ops()
+        ));
+
+        info!("mkdir: fullpath={:?} ops={:?}", fullpath, newdir.borrow().ops());
 
         match self.mknod(parent_dir, Node::Dir(newdir.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newdir) },
@@ -125,10 +154,21 @@ impl BasicFileSystem {
     }
 
     pub fn mkfile(&mut self, parent_dir: &RcRef<Dir>, path: &Path, mode: u32) -> Result<RcRef<File>> {
-        let inode = self.next_inode;
-        let ops = self.get_ops(path, FileType::RegularFile);
+        let mut fullpath = get_path(self, &Node::Dir(parent_dir.clone()));
+        fullpath.push(path);
+
+        let ops = self.get_ops(&fullpath, FileType::RegularFile);
         let filename = path.file_name().unwrap().to_str().unwrap();
-        let newfile = RcRef!(File::new(filename, inode, mode as Perm, ops.borrow().new_ops()));
+        let attr = FileAttr {
+            ino: self.next_inode,
+            perm: mode as Perm,
+            ..fileattr_new()
+        };
+        let newfile = RcRef!(File::new(
+            filename, attr, None, ops.borrow().new_ops()
+        ));
+
+        info!("mkfile: fullpath={:?} ops={:?}", fullpath, newfile.borrow().ops());
 
         match self.mknod(parent_dir, Node::File(newfile.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newfile) },
@@ -282,6 +322,9 @@ impl fuse::Filesystem for BasicFileSystem {
                 Err(err) => { reply.error(err); return }
             };
 
+            info!("open: fullpath={:?} handle={} handler={}",
+                get_path(self, &node), handle, handler.borrow().name());
+
             self.openfds.insert(handle, handler);
             self.next_handle += 1;
             reply.opened(handle, flags | FOPEN_DIRECT_IO);
@@ -312,7 +355,11 @@ impl fuse::Filesystem for BasicFileSystem {
         let result =
             get_handler_for!(self, fh, reply).borrow_mut().release(flags, flush);
         match result {
-            Ok(_) => { self.openfds.remove(&fh); reply.ok() },
+            Ok(_) => {
+                self.openfds.remove(&fh);
+                reply.ok();
+                info!("release: handle={}", fh);
+            },
             Err(err) => reply.error(err)
         }
     }

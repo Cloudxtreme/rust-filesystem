@@ -32,8 +32,7 @@ impl ops::Operations for RootDirOps {
     }
 
     fn is_target(&mut self, path: &Path, kind: FileType) -> bool {
-        info!("{}.is_target: path={:?} kind={:?}", self.name(), path, kind);
-        kind == FileType::Directory && path == Path::new("tcp")
+        kind == FileType::Directory && path == Path::new("/tcp")
     }
 
     fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
