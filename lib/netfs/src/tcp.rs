@@ -35,7 +35,10 @@ impl ops::Operations for RootDirOps {
         kind == FileType::Directory && path == Path::new("/tcp")
     }
 
-    fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
+    fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
+        let dir = fs.find_node(ino).unwrap().clone();
+        try!(fs.mkdir(dir.to_dir(), "1".as_ref(), 0o775));
+        try!(fs.mkfile(dir.to_dir(), "clone".as_ref(), 0o775));
         Ok(())
     }
 

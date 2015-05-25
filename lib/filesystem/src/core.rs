@@ -31,6 +31,7 @@ pub struct BasicFileSystem {
 }
 
 pub fn get_path(fs: &BasicFileSystem, node: &Node) -> PathBuf {
+    assert!(node.parent() != Some(node.attr().ino));
     match node.parent() {
         Some(parent) => {
             let parent_node = fs.find_node(parent).unwrap();
@@ -135,7 +136,7 @@ impl BasicFileSystem {
         fullpath.push(path);
 
         let ops = self.get_ops(&fullpath, FileType::Directory);
-        let dirname = path.file_name().unwrap().to_str().unwrap();
+        let dirname = path.to_str().unwrap();
         let attr = FileAttr {
             ino: self.next_inode,
             perm: mode as Perm,
@@ -144,11 +145,12 @@ impl BasicFileSystem {
         let newdir = RcRef!(Dir::new(
             dirname, attr, None, ops.borrow().new_ops()
         ));
+        self.next_inode += 1;
 
-        info!("mkdir: fullpath={:?} ops={:?}", fullpath, newdir.borrow().ops());
+        info!("mkdir: fullpath={:?} ops={}", fullpath, ops.borrow().name());
 
         match self.mknod(parent_dir, Node::Dir(newdir.clone())) {
-            Ok(_) => { self.next_inode += 1; Ok(newdir) },
+            Ok(_) => { Ok(newdir) },
             Err(err) => Err(err)
         }
     }
@@ -158,7 +160,7 @@ impl BasicFileSystem {
         fullpath.push(path);
 
         let ops = self.get_ops(&fullpath, FileType::RegularFile);
-        let filename = path.file_name().unwrap().to_str().unwrap();
+        let filename = path.to_str().unwrap();
         let attr = FileAttr {
             ino: self.next_inode,
             perm: mode as Perm,
@@ -168,7 +170,7 @@ impl BasicFileSystem {
             filename, attr, None, ops.borrow().new_ops()
         ));
 
-        info!("mkfile: fullpath={:?} ops={:?}", fullpath, newfile.borrow().ops());
+        info!("mkfile: fullpath={:?} ops={}", fullpath, ops.borrow().name());
 
         match self.mknod(parent_dir, Node::File(newfile.clone())) {
             Ok(_) => { self.next_inode += 1; Ok(newfile) },
