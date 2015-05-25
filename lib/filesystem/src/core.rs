@@ -16,7 +16,7 @@ use self::libc::consts::os::posix88::*; /* POSIX errno */
 use self::fuse::consts::*;
 use self::fuse::{FileType, FileAttr};
 use self::fuse::{Request, ReplyEmpty, ReplyData, ReplyEntry, ReplyAttr};
-use self::fuse::{ReplyOpen, ReplyWrite, ReplyStatfs, ReplyCreate, ReplyDirectory};
+use self::fuse::{ReplyOpen, ReplyWrite, ReplyStatfs, ReplyDirectory};
 
 pub type Handle   = u64;
 pub type Priority = u32;
@@ -30,10 +30,15 @@ pub struct BasicFileSystem {
     next_handle: Handle,
 }
 
+// NOTE::
+//  Do unwrap() on Path::to_str()
+//  We have no choice but to panic!()
+
 pub fn get_path(fs: &BasicFileSystem, node: &Node) -> PathBuf {
     assert!(node.parent() != Some(node.attr().ino));
     match node.parent() {
         Some(parent) => {
+            // unwrap: Some(parent) must be valid
             let parent_node = fs.find_node(parent).unwrap();
             let mut path = get_path(fs, &parent_node);
             path.push(node.name());
@@ -68,13 +73,14 @@ impl BasicFileSystem {
     }
 
     fn get_ops(&self, path: &Path, kind: FileType) -> RcRefBox<ops::Operations> {
-        // Do unwrap() due to at least default operations
+        // unwrap: At least default operations
         // (FileOps, DirOps) must be available after new()
         self.ops.find(|&&(_, ref t)| t.borrow_mut().is_target(path, kind)).unwrap().1.clone()
     }
 
     pub fn register_ops(&mut self, p: Priority, ops: RcRefBox<ops::Operations>) {
         if ops.borrow_mut().install(self) {
+            info!("register_ops: {} installed", ops.borrow().name());
             self.ops.add(p, ops)
         }
     }
@@ -82,8 +88,10 @@ impl BasicFileSystem {
     pub fn unregister_ops(&mut self, name: &str) {
         let result = self.ops.remove(|&(_, ref t)| t.borrow().name() == name);
         if result.is_some() {
+            // unwrap: result.is_some() == true
             let ops = result.unwrap().1;
             ops.borrow_mut().uninstall(self);
+            info!("unregister_ops: {} uninstalled", ops.borrow().name());
         }
     }
 
@@ -116,7 +124,7 @@ impl BasicFileSystem {
 
     pub fn rmnod(&mut self, _parent_dir: &RcRef<Dir>, path: &Path, kind: FileType) -> Result<()> {
         let mut parent_dir = _parent_dir.borrow_mut();
-        let name = path.file_name().unwrap().to_str().unwrap();
+        let name = path.to_str().unwrap();
         let (inode, result) = {
             let node = try!(parent_dir.find_node(name).ok_or(ENOENT));
             let inode = node.attr().ino;
@@ -125,7 +133,7 @@ impl BasicFileSystem {
             (inode, ops.rmnod(self, inode))
         };
         if result.is_ok() {
-            parent_dir.rmnod(name, kind).unwrap();  // assert if failed
+            let _ = parent_dir.rmnod(name, kind);
             self.unregister_node(inode);
         }
         result
@@ -294,8 +302,8 @@ impl fuse::Filesystem for BasicFileSystem {
     }
 
     fn rename(&mut self, _req: &Request, parent: u64, name: &Path, newparent: u64, newname: &Path, reply: ReplyEmpty) {
-        let name = name.file_name().unwrap().to_str().unwrap();
-        let newname = newname.file_name().unwrap().to_str().unwrap();
+        let name = name.to_str().unwrap();
+        let newname = newname.to_str().unwrap();
         let parent_dir = find_node_or_error!(self, parent, reply);
         let new_parent_dir = find_node_or_error!(self, newparent, reply);
         let mut node = find_node_or_error!(parent_dir.to_dir().borrow(), name, reply);

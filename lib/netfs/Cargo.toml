@@ -11,6 +11,8 @@ crate-type = ["rlib"]
 time = "*"
 libc = "*"
 log = "*"
+regex = "*"
+regex_macros = "*"
 
 [dependencies.filesystem]
 path = "../filesystem/"

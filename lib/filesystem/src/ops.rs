@@ -15,14 +15,8 @@ use core::BasicFileSystem;
 pub trait Operations {
     fn name(&self) -> &str;
     fn new_ops(&self) -> RcRefBox<Operations>;
-    fn install(&mut self, _fs: &mut BasicFileSystem) -> bool {
-        info!("{} installed", self.name());
-        true
-    }
-    fn uninstall(&mut self, _fs: &mut BasicFileSystem) -> bool {
-        info!("{} uninstalled", self.name());
-        true
-    }
+    fn install(&mut self, _fs: &mut BasicFileSystem) -> bool { true }
+    fn uninstall(&mut self, _fs: &mut BasicFileSystem) -> bool { true }
     fn is_target(&mut self, _path: &Path, _kind: FileType) -> bool { false }
     fn getattr(&mut self, node: Node) -> Result<FileAttr> {
         Ok(node.attr())
