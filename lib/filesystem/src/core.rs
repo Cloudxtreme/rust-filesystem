@@ -149,10 +149,7 @@ impl BasicFileSystem {
 
         info!("mkdir: fullpath={:?} ops={}", fullpath, ops.borrow().name());
 
-        match self.mknod(parent_dir, Node::Dir(newdir.clone())) {
-            Ok(_) => { Ok(newdir) },
-            Err(err) => Err(err)
-        }
+        self.mknod(parent_dir, Node::Dir(newdir.clone())).and(Ok(newdir))
     }
 
     pub fn mkfile(&mut self, parent_dir: &RcRef<Dir>, path: &Path, mode: u32) -> Result<RcRef<File>> {
@@ -169,13 +166,11 @@ impl BasicFileSystem {
         let newfile = RcRef!(File::new(
             filename, attr, None, ops.borrow().new_ops()
         ));
+        self.next_inode += 1;
 
         info!("mkfile: fullpath={:?} ops={}", fullpath, ops.borrow().name());
 
-        match self.mknod(parent_dir, Node::File(newfile.clone())) {
-            Ok(_) => { self.next_inode += 1; Ok(newfile) },
-            Err(err) => Err(err)
-        }
+        self.mknod(parent_dir, Node::File(newfile.clone())).and(Ok(newfile))
     }
 }
 
