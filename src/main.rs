@@ -1,6 +1,4 @@
 
-#![allow(non_camel_case_types)]
-
 #[macro_use]
 extern crate log;
 extern crate env_logger;
