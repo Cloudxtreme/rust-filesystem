@@ -6,6 +6,7 @@ dependencies = [
  "filesystem 0.0.1",
  "fuse 0.2.6 (git+https://github.com/zargony/rust-fuse.git)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "netfs 0.0.1",
  "time 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -53,6 +54,17 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "netfs"
+version = "0.0.1"
+dependencies = [
+ "filesystem 0.0.1",
+ "fuse 0.2.6 (git+https://github.com/zargony/rust-fuse.git)",
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

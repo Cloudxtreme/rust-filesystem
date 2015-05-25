@@ -10,7 +10,7 @@ extern crate log;
 
 pub use core::BasicFileSystem;
 
-mod common;
+pub mod common;
 pub mod fs;
 pub mod ops;
 pub mod core;

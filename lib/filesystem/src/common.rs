@@ -73,7 +73,7 @@ impl<K: Ord, T> PriorityQueue<K, T> {
 
     pub fn add(&mut self, k: K, t: T) {
         self.data.push((k, t));
-        self.data.sort_by(|a, b| b.0.cmp(&a.0));
+        self.sort();
     }
 
     pub fn remove<F>(&mut self, f: F) -> Option<(K, T)>
@@ -85,5 +85,9 @@ impl<K: Ord, T> PriorityQueue<K, T> {
         where F: for<'r> FnMut(&'r &(K, T)) -> bool
     {
         self.data.iter().find(f)
+    }
+
+    fn sort(&mut self) {
+        self.data.sort_by(|a, b| b.0.cmp(&a.0));
     }
 }

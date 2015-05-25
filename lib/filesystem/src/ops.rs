@@ -54,8 +54,8 @@ pub struct FileOps {
 }
 
 impl FileOps {
-    pub fn new() -> Self {
-        FileOps { data: RcRef!(Vec::new()) }
+    pub fn new() -> RcRefBox<Operations> {
+        RcRefBox!(FileOps { data: RcRef!(Vec::new()) })
     }
 }
 
@@ -65,7 +65,7 @@ impl Operations for FileOps {
     }
 
     fn new_ops(&self) -> RcRefBox<Operations> {
-        RcRefBox!(Self::new())
+        Self::new()
     }
 
     fn is_target(&mut self, _path: &Path, kind: FileType) -> bool {
@@ -144,7 +144,7 @@ impl OpenHandler for FileHandler {
 pub struct DirOps;
 
 impl DirOps {
-    pub fn new() -> Self { DirOps }
+    pub fn new() -> RcRefBox<Operations> { RcRefBox!(DirOps) }
 }
 
 impl Operations for DirOps {
@@ -153,7 +153,7 @@ impl Operations for DirOps {
     }
 
     fn new_ops(&self) -> RcRefBox<Operations> {
-        RcRefBox!(Self::new())
+        Self::new()
     }
 
     fn is_target(&mut self, _path: &Path, kind: FileType) -> bool {

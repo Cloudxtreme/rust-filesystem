@@ -1,31 +1,17 @@
 
-#![feature(libc)]
-#![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
 #[macro_use]
 extern crate log;
 extern crate env_logger;
-extern crate libc;
-extern crate time;
 extern crate fuse;
 extern crate filesystem;
+extern crate netfs;
 
-use filesystem::*;
+use netfs::*;
+use filesystem::core::Priority;
 
-struct fusefs {
-    name: String,
-    fs: filesystem::BasicFileSystem,
-}
-
-impl fusefs {
-    fn new(fs_name: &str) -> fusefs {
-        fusefs {
-            name: fs_name.to_owned(),
-            fs: filesystem::BasicFileSystem::new(),
-        }
-    }
-}
+const FS_NAME: &'static str = "fuse-wlfs";
 
 fn wlfs_main(args: Vec<String>) -> i32 {
     if args.len() < 2 {
@@ -33,14 +19,16 @@ fn wlfs_main(args: Vec<String>) -> i32 {
         return -1;
     }
 
-    let fs = fusefs::new("rust-wlfs");
+    let mut fs = filesystem::BasicFileSystem::new();
+    fs.register_ops(Priority::max_value(), tcp::RootDirOps::new());
+
     let options = format!(
         "-o,fsname={},allow_other,\
-        intr,nonempty,direct_io", fs.name);
+        intr,nonempty,direct_io", FS_NAME);
 
     info!("mount options: {}", options);
 
-    fuse::mount(fs.fs, &args[1], &[options.as_ref()]);
+    fuse::mount(fs, &args[1], &[options.as_ref()]);
     return 0;
 }
 

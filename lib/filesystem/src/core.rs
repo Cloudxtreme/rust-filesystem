@@ -32,7 +32,7 @@ pub struct BasicFileSystem {
 
 impl BasicFileSystem {
     pub fn new() -> BasicFileSystem {
-        let dirops: RcRefBox<ops::Operations> = RcRefBox!(ops::DirOps::new());
+        let dirops = ops::DirOps::new();
         let root = RcRef!(Dir::new("/", fuse::FUSE_ROOT_ID, 0o755, dirops.clone()));
         let mut fs = BasicFileSystem {
             root: root.clone(),
@@ -45,7 +45,7 @@ impl BasicFileSystem {
 
         fs.register_node(Node::Dir(root));
         fs.register_ops(Priority::min_value(), dirops);
-        fs.register_ops(Priority::min_value(), RcRefBox!(ops::FileOps::new()));
+        fs.register_ops(Priority::min_value(), ops::FileOps::new());
         fs
     }
 
@@ -64,8 +64,8 @@ impl BasicFileSystem {
     pub fn unregister_ops(&mut self, name: &str) {
         let result = self.ops.remove(|&(_, ref t)| t.borrow().name() == name);
         if result.is_some() {
-            let op = result.unwrap().1;
-            op.borrow_mut().uninstall(self);
+            let ops = result.unwrap().1;
+            ops.borrow_mut().uninstall(self);
         }
     }
 
@@ -139,7 +139,7 @@ impl BasicFileSystem {
 
 impl Drop for BasicFileSystem {
     fn drop(&mut self) {
-        let names: Vec<_> = self.ops.iter().rev()
+        let names: Vec<_> = self.ops.iter()
             .map(|&(_, ref t)| t.borrow().name().to_owned()).collect();
         for ref ops_name in names {
             self.unregister_ops(ops_name);

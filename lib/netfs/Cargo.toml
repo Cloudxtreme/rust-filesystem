@@ -1,22 +1,19 @@
-
 [package]
-name = "wlfs"
+name = "netfs"
 version = "0.0.1"
 authors = [ "afpacket <afpacket@gmail.com>" ]
 
-[[bin]]
-name = "wlfs"
+[lib]
+name = "netfs"
+crate-type = ["rlib"]
 
 [dependencies]
 time = "*"
+libc = "*"
 log = "*"
-env_logger = "*"
 
 [dependencies.filesystem]
-path = "lib/filesystem/"
-
-[dependencies.netfs]
-path = "lib/netfs/"
+path = "../filesystem/"
 
 [dependencies.fuse]
 git = "https://github.com/zargony/rust-fuse.git"
