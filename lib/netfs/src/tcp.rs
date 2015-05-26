@@ -90,12 +90,12 @@ impl ops::Operations for SessionDirOps {
 
 
 pub struct ClientOps {
-    socket: RcRef<Option<net::TcpStream>>
+    socket: Option<net::TcpStream>
 }
 
 impl ClientOps {
     fn new() -> RcRefBox<Operations> {
-        RcRefBox!(ClientOps { socket: RcRef!(None) })
+        RcRefBox!(ClientOps { socket: None })
     }
 }
 
@@ -117,27 +117,24 @@ impl Operations for ClientOps {
     fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
         let sockaddr: &str = &fs.find_node(ino).unwrap().name();
         let socket = try!(net::TcpStream::connect(sockaddr).or(Err(ECONNREFUSED)));
-        *self.socket.borrow_mut() = Some(socket);
-        Ok(())
-    }
-
-    fn rmnod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode) -> Result<()> {
+        self.socket = Some(socket);
         Ok(())
     }
 
     fn open(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm)
         -> Result<RcRefBox<OpenHandler>>
     {
-        Ok(ClientHandler::open(self.socket.clone()))
+        let result = try!(self.socket.as_ref().ok_or(ENOENT).map(|s| s.try_clone()));
+        Ok( ClientHandler::open( try!(result.or(Err(ENOENT))) ) )
     }
 }
 
 struct ClientHandler {
-    socket: RcRef<Option<net::TcpStream>>
+    socket: net::TcpStream
 }
 
 impl ClientHandler {
-    fn open(socket: RcRef<Option<net::TcpStream>>) -> RcRefBox<OpenHandler> {
+    fn open(socket: net::TcpStream) -> RcRefBox<OpenHandler> {
         RcRefBox!(ClientHandler { socket: socket })
     }
 }
@@ -149,15 +146,11 @@ impl OpenHandler for ClientHandler {
 
     fn read(&mut self, _offset: u64, _size: u64) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
-        let mut _stream = self.socket.borrow_mut();
-        let stream = _stream.as_mut().unwrap();
-        stream.read_to_end(&mut buf).and(Ok(buf)).or(Err(EIO))
+        self.socket.read_to_end(&mut buf).and(Ok(buf)).or(Err(EIO))
     }
 
     fn write(&mut self, src: &[u8], _offset: u64, size: u64) -> Result<u64> {
-        let mut _stream = self.socket.borrow_mut();
-        let stream = _stream.as_mut().unwrap();
-        stream.write_all(src).and(Ok(size)).or(Err(EIO))
+        self.socket.write_all(src).and(Ok(size)).or(Err(EIO))
     }
 
     fn release (&mut self, _flags: u32, _flush: bool) -> Result<()> {
