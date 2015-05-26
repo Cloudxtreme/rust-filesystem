@@ -22,10 +22,10 @@ pub trait Operations {
         Ok(node.attr())
     }
     fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
-        Err(ENOSYS)
+        Ok(())
     }
     fn rmnod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode) -> Result<()> {
-        Err(ENOSYS)
+        Ok(())
     }
     fn open(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm)
         -> Result<RcRefBox<OpenHandler>>

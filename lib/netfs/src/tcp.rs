@@ -34,12 +34,8 @@ impl ops::Operations for RootDirOps {
     }
 
     fn install(&mut self, fs: &mut BasicFileSystem) -> bool {
-        let mut ops = Vec::new();
-        ops.push(ClientOps::new());
-        ops.push(SessionDirOps::new());
-
+        let ops = vec![ClientOps::new(), SessionDirOps::new()];
         self.installed = ops.iter().map(|v| v.borrow().name().to_owned()).collect();
-
         for op in ops {
             fs.register_ops(Priority::max_value(), op);
         }
@@ -47,8 +43,8 @@ impl ops::Operations for RootDirOps {
     }
 
     fn uninstall(&mut self, fs: &mut BasicFileSystem) -> bool {
-        for ref op in self.installed.iter().rev() {
-            fs.unregister_ops(op);
+        for ref ops_name in self.installed.iter().rev() {
+            fs.unregister_ops(ops_name);
         }
         true
     }
@@ -64,10 +60,6 @@ impl ops::Operations for RootDirOps {
     fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
         let dir = fs.find_node(ino).unwrap().clone();
         try!(fs.mkdir(dir.to_dir(), "1".as_ref(), 0o775));
-        Ok(())
-    }
-
-    fn rmnod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode) -> Result<()> {
         Ok(())
     }
 }
@@ -93,14 +85,6 @@ impl ops::Operations for SessionDirOps {
 
     fn is_target(&mut self, path: &Path, kind: FileType) -> bool {
         kind == FileType::Directory && SESSION_DIR_REG.is_match(path.to_str().unwrap())
-    }
-
-    fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
-        Ok(())
-    }
-
-    fn rmnod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode) -> Result<()> {
-        Ok(())
     }
 }
 
@@ -130,8 +114,8 @@ impl Operations for ClientOps {
         kind == FileType::RegularFile && CLIENT_OPS_REG.is_match(path.to_str().unwrap())
     }
 
-    fn mknod(&mut self, _fs: &mut BasicFileSystem, _ino: Inode, _perm: Perm) -> Result<()> {
-        let sockaddr = &_fs.find_node(_ino).unwrap().name()[..];
+    fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
+        let sockaddr: &str = &fs.find_node(ino).unwrap().name();
         let socket = try!(net::TcpStream::connect(sockaddr).or(Err(ECONNREFUSED)));
         *self.socket.borrow_mut() = Some(socket);
         Ok(())
