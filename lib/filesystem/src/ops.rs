@@ -46,7 +46,9 @@ pub trait OpenHandler {
     fn name(&self) -> &str;
     fn read(&mut self, _offset: u64, _size: u64) -> Result<Vec<u8>>;
     fn write(&mut self, _data: &[u8], _offset: u64, _size: u64) -> Result<u64>;
-    fn release (&mut self, _flags: u32, _flush: bool) -> Result<()>;
+    fn release (&mut self, _flags: u32, _flush: bool) -> Result<()> {
+        Ok(())
+    }
 }
 
 //
@@ -138,10 +140,6 @@ impl OpenHandler for FileHandler {
 
         slice::bytes::copy_memory(src, &mut dst[begin..end]);
         Ok(size)
-    }
-
-    fn release (&mut self, _flags: u32, _flush: bool) -> Result<()> {
-        Ok(())
     }
 }
 
