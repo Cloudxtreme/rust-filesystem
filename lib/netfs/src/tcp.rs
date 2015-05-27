@@ -38,7 +38,7 @@ impl ops::Operations for RootDirOps {
     }
 
     fn is_target(&mut self, path: &Path, kind: FileType) -> bool {
-        kind == FileType::Directory && path == Path::new("/tcp")
+        kind == FileType::Directory && path == Path::new("/net/tcp")
     }
 
     fn mknod(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm) -> Result<()> {
@@ -64,7 +64,7 @@ impl Operations for CloneOps {
     fn new_ops(&self) -> RcRefBox<Operations> { Self::new() }
 
     fn is_target(&mut self, path: &Path, kind: FileType) -> bool {
-        kind == FileType::RegularFile && path == Path::new("/tcp/clone")
+        kind == FileType::RegularFile && path == Path::new("/net/tcp/clone")
     }
 
     fn open(&mut self, fs: &mut BasicFileSystem, ino: Inode, _perm: Perm)
@@ -120,7 +120,7 @@ impl SessionDirOps {
     }
 }
 
-static SESSION_DIR_REG: regex::Regex = regex!(r"/tcp/(\d+)");
+static SESSION_DIR_REG: regex::Regex = regex!(r"/net/tcp/(\d+)");
 
 impl Operations for SessionDirOps {
     fn name(&self) -> &str { "netfs.tcp.SessionDirOps" }
@@ -141,7 +141,7 @@ impl ClientOps {
     }
 }
 
-static CLIENT_OPS_REG: regex::Regex = regex!(r"/tcp/((\d{1,3}\.){3}\d{1,3}:\d{1,6})");
+static CLIENT_OPS_REG: regex::Regex = regex!(r"/net/tcp/((\d{1,3}\.){3}\d{1,3}:\d{1,6})");
 
 impl Operations for ClientOps {
     fn name(&self) -> &str { "netfs.tcp.ClientOps" }
